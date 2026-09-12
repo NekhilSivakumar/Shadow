@@ -8,7 +8,7 @@ for name, url in [("brain", "http://localhost:8000/health"), ("body", "http://lo
         print(f"ERROR: {name} service isn't running. Run start_all.bat first.")
         sys.exit(1)
 if len(sys.argv) < 2:
-    print("Usage: python run_task.py \"your instruction here\"")
+    print("Usage: python run_task.py \"Hello\"")
     sys.exit(1)
 
 instruction = " ".join(sys.argv[1:])

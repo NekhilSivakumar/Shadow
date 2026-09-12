@@ -3,7 +3,7 @@ import os
 import re
 import time
 import uuid
-
+from brain.connectors.google import list_upcoming_events
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -52,7 +52,12 @@ def _build_plan(instruction: str) -> list[AgentAction]:
     Falls back to an empty plan (Gemini decides freely) for anything
     that doesn't match a recognized pattern."""
     lower = instruction.lower()
-
+        # Pattern: "check calendar" / "check my calendar" / "check google calendar"
+    if re.search(r"check\s+(my\s+)?(google\s+)?calendar", lower):
+        return [
+            AgentAction(action_id=str(uuid.uuid4()), type=ActionType.NAVIGATE_URL, url="https://calendar.google.com"),
+            AgentAction(action_id=str(uuid.uuid4()), type=ActionType.SCREENSHOT),
+        ]
     # Pattern: "open <app> and type <text>"
     match = re.search(r"open\s+([a-z0-9\-_ ]+?)\s+and\s+type\s+(.+)", lower)
     if match:
@@ -140,8 +145,15 @@ def _gather_context(instruction: str) -> str:
         except Exception as e:
             context_parts.append(f"Slack lookup failed: {e}")
 
-    return "\n".join(context_parts) if context_parts else "No connector data needed for this task."
+    if "calendar" in lower or "gmail" in lower or "email" in lower:
+        try:
+            events = list_upcoming_events()
+            summaries = [e.get("summary") for e in events]
+            context_parts.append(f"Real upcoming calendar events: {summaries}")
+        except Exception as e:
+            context_parts.append(f"Google Calendar lookup failed: {e}")
 
+    return "\n".join(context_parts) if context_parts else "No connector data needed for this task."
 
 def _decide_next_action() -> AgentAction:
     prompt = f"""You are controlling a computer to complete a task.
