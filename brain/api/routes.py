@@ -16,3 +16,11 @@ def observe(result: ActionResult):
 def start_task(instruction: str):
     """Kick off a new agent task, e.g. 'book my dentist appointment'."""
     return start_new_task(instruction)
+from brain.memory.behavioral import get_behavior_profile, get_behavioral_arc
+
+@router.get("/behavior-summary")
+def behavior_summary():
+    return {
+        "profile": get_behavior_profile(),
+        "arc": get_behavioral_arc(),
+    }
