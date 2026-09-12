@@ -12,6 +12,8 @@ Steps:
 """
 
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build

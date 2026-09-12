@@ -12,3 +12,4 @@ tavily-python
 beautifulsoup4
 requests
 pyautogui
+requests
