@@ -3,7 +3,7 @@ import os
 import re
 import time
 import uuid
-from brain.connectors.google import list_upcoming_events
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -12,6 +12,7 @@ import google.generativeai as genai
 from shared.contracts import ActionResult, AgentAction, ActionType
 from brain.connectors.notion import get_recent_pages
 from brain.connectors.slack import get_unread_mentions
+from brain.connectors.google import list_upcoming_events
 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 model = genai.GenerativeModel("gemini-3.6-flash")
@@ -48,16 +49,8 @@ def _next_plan_step() -> AgentAction:
 
 
 def _build_plan(instruction: str) -> list[AgentAction]:
-    """Explicit, deterministic sequencing for known task shapes.
-    Falls back to an empty plan (Gemini decides freely) for anything
-    that doesn't match a recognized pattern."""
     lower = instruction.lower()
-        # Pattern: "check calendar" / "check my calendar" / "check google calendar"
-    if re.search(r"check\s+(my\s+)?(google\s+)?calendar", lower):
-        return [
-            AgentAction(action_id=str(uuid.uuid4()), type=ActionType.NAVIGATE_URL, url="https://calendar.google.com"),
-            AgentAction(action_id=str(uuid.uuid4()), type=ActionType.SCREENSHOT),
-        ]
+
     # Pattern: "open <app> and type <text>"
     match = re.search(r"open\s+([a-z0-9\-_ ]+?)\s+and\s+type\s+(.+)", lower)
     if match:
@@ -66,29 +59,6 @@ def _build_plan(instruction: str) -> list[AgentAction]:
         return [
             AgentAction(action_id=str(uuid.uuid4()), type=ActionType.OPEN_APP, app_name=app_name),
             AgentAction(action_id=str(uuid.uuid4()), type=ActionType.TYPE, text=text),
-            AgentAction(action_id=str(uuid.uuid4()), type=ActionType.SCREENSHOT),
-        ]
-
-    # Pattern: "open <app> and search for <text>"
-    match = re.search(r"open\s+([a-z0-9\-_ ]+?)\s+and\s+search\s+(?:for\s+)?(.+)", lower)
-    if match:
-        app_name = match.group(1).strip()
-        query = match.group(2).strip()
-        return [
-            AgentAction(action_id=str(uuid.uuid4()), type=ActionType.OPEN_APP, app_name=app_name),
-            AgentAction(action_id=str(uuid.uuid4()), type=ActionType.KEY, key="ctrl+f"),
-            AgentAction(action_id=str(uuid.uuid4()), type=ActionType.TYPE, text=query),
-            AgentAction(action_id=str(uuid.uuid4()), type=ActionType.SCREENSHOT),
-        ]
-
-    # Pattern: "open <url/website>"
-    match = re.search(r"^open\s+(https?://\S+|\S+\.\S+)$", lower.strip())
-    if match:
-        url = match.group(1).strip()
-        if not url.startswith("http"):
-            url = "https://" + url
-        return [
-            AgentAction(action_id=str(uuid.uuid4()), type=ActionType.NAVIGATE_URL, url=url),
             AgentAction(action_id=str(uuid.uuid4()), type=ActionType.SCREENSHOT),
         ]
 
@@ -106,7 +76,14 @@ def _build_plan(instruction: str) -> list[AgentAction]:
             AgentAction(action_id=str(uuid.uuid4()), type=ActionType.SCREENSHOT),
         ]
 
-    # Pattern: "type <text>" (no app specified — assumes something is already focused)
+    # Pattern: "check calendar" / "check my calendar"
+    if re.search(r"check\s+(my\s+)?(google\s+)?calendar", lower):
+        return [
+            AgentAction(action_id=str(uuid.uuid4()), type=ActionType.NAVIGATE_URL, url="https://calendar.google.com"),
+            AgentAction(action_id=str(uuid.uuid4()), type=ActionType.SCREENSHOT),
+        ]
+
+    # Pattern: "type <text>" (no app specified)
     match = re.search(r"^type\s+(.+)", lower.strip())
     if match:
         text = match.group(1).strip()
@@ -115,15 +92,15 @@ def _build_plan(instruction: str) -> list[AgentAction]:
             AgentAction(action_id=str(uuid.uuid4()), type=ActionType.SCREENSHOT),
         ]
 
-    # Pattern: "open <app>" only
-    match = re.search(r"^open\s+([a-z0-9\-_ ]+)$", lower.strip())
+    # Pattern: "open <app>" only — single word, no "and"/multi-clause phrases
+    match = re.search(r"^open\s+([a-z0-9\-_]+)$", lower.strip())
     if match:
         app_name = match.group(1).strip()
         return [
             AgentAction(action_id=str(uuid.uuid4()), type=ActionType.OPEN_APP, app_name=app_name),
         ]
 
-    return []  # unrecognized pattern — let Gemini decide freely
+    return []
 
 
 def _gather_context(instruction: str) -> str:
@@ -154,6 +131,7 @@ def _gather_context(instruction: str) -> str:
             context_parts.append(f"Google Calendar lookup failed: {e}")
 
     return "\n".join(context_parts) if context_parts else "No connector data needed for this task."
+
 
 def _decide_next_action() -> AgentAction:
     prompt = f"""You are controlling a computer to complete a task.

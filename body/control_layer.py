@@ -54,7 +54,12 @@ def _perform_action(action: AgentAction) -> ActionResult:
             pyautogui.press(action.key or "enter")
         elif action.type == ActionType.OPEN_APP:
             subprocess.Popen(f"start {action.app_name}", shell=True)
-            time.sleep(2)
+            time.sleep(4)
+            # force real focus with an actual click, since background
+            # sessions can silently block programmatic window activation
+            screen_width, screen_height = pyautogui.size()
+            pyautogui.click(x=screen_width // 2, y=screen_height // 2)
+            time.sleep(0.5)
         elif action.type == ActionType.NAVIGATE_URL:
             subprocess.Popen(f"start {action.url}", shell=True)
             time.sleep(2)
