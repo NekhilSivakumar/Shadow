@@ -1,18 +1,18 @@
-"""
-Person A builds the REAL version of this file.
+import time
+import base64
+import subprocess
+from io import BytesIO
 
-This stub simulates execution, logs each step to episodic memory,
-and auto-chains with the brain's /observe endpoint.
-"""
-
-import os
+import pyautogui
 import requests
+import os
 from fastapi import FastAPI
 
-from shared.contracts import AgentAction, ActionResult
-from brain.memory.episodic import log_event
+from shared.contracts import AgentAction, ActionResult, ActionType
 
-app = FastAPI(title="Digital Twin — Body (stub)")
+app = FastAPI(title="Digital Twin — Body (real, same-machine)")
+
+pyautogui.FAILSAFE = True
 
 BRAIN_URL = os.getenv("BRAIN_URL", "http://localhost:8000")
 MAX_STEPS = 5
@@ -24,32 +24,59 @@ def execute(action: AgentAction) -> ActionResult:
 
 
 def _run_chain(action: AgentAction, steps_remaining: int) -> ActionResult:
-    print(f"[stub] executing step (remaining={steps_remaining}): {action}")
-
-    log_event({
-        "action_id": action.action_id,
-        "type": action.type.value,
-        "app_name": action.app_name,
-        "url": action.url,
-    })
-
-    result = ActionResult(action_id=action.action_id, success=True, screenshot_b64=None)
+    print(f"[real] executing (remaining={steps_remaining}): {action}")
+    result = _perform_action(action)
 
     if steps_remaining <= 0:
-        print("[stub] step limit reached, stopping chain")
+        print("[real] step limit reached, stopping chain")
         return result
 
     try:
-        resp = requests.post(f"{BRAIN_URL}/observe", json=result.model_dump(), timeout=10)
+        resp = requests.post(f"{BRAIN_URL}/observe", json=result.model_dump(), timeout=120)
         resp.raise_for_status()
         next_action = AgentAction(**resp.json())
     except Exception as e:
-        print(f"[stub] chain stopped, could not reach brain: {e}")
+        print(f"[real] chain stopped, could not reach brain: {e}")
         return result
 
     return _run_chain(next_action, steps_remaining=steps_remaining - 1)
 
 
+def _perform_action(action: AgentAction) -> ActionResult:
+    try:
+        if action.type == ActionType.CLICK:
+            pyautogui.click(x=action.x, y=action.y)
+        elif action.type == ActionType.TYPE:
+            pyautogui.write(action.text or "", interval=0.03)
+        elif action.type == ActionType.SCROLL:
+            pyautogui.scroll(-300)
+        elif action.type == ActionType.KEY:
+            pyautogui.press(action.key or "enter")
+        elif action.type == ActionType.OPEN_APP:
+            subprocess.Popen(f"start {action.app_name}", shell=True)
+            time.sleep(2)
+        elif action.type == ActionType.NAVIGATE_URL:
+            subprocess.Popen(f"start {action.url}", shell=True)
+            time.sleep(2)
+
+        screenshot_b64 = _capture_screenshot()
+        return ActionResult(action_id=action.action_id, success=True, screenshot_b64=screenshot_b64)
+
+    except Exception as e:
+        return ActionResult(action_id=action.action_id, success=False, error=str(e))
+
+
+def _capture_screenshot() -> str | None:
+    try:
+        img = pyautogui.screenshot()
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=50)
+        return base64.b64encode(buf.getvalue()).decode()
+    except Exception as e:
+        print(f"[warning] screenshot capture failed: {e}")
+        return None
+
+
 @app.get("/health")
 def health():
-    return {"status": "body stub online"}
+    return {"status": "body online (real, chained)"}
