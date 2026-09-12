@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+pydantic
+anthropic
+python-dotenv
+google-auth
+google-auth-oauthlib
+google-api-python-client
+slack_sdk
+notion-client
+tavily-python
+beautifulsoup4
+requests
+pyautogui
